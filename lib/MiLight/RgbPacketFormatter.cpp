@@ -48,7 +48,7 @@ void RgbPacketFormatter::updateColorRaw(uint8_t value) {
 }
 
 void RgbPacketFormatter::updateBrightness(uint8_t value) {
-  const GroupState* state = this->stateStore->get(deviceId, groupId, MiLightRemoteType::REMOTE_TYPE_RGB);
+  const GroupState* state = this->stateStore->get(deviceId, groupId, this->deviceType);
   int8_t knownValue = (state != NULL && state->isSetBrightness()) ? state->getBrightness() / RGB_INTERVALS : -1;
 
   valueByStepFunction(
@@ -90,7 +90,7 @@ BulbId RgbPacketFormatter::parsePacket(const uint8_t* packet, JsonObject result)
   BulbId bulbId(
     (packet[1] << 8) | packet[2],
     0,
-    REMOTE_TYPE_RGB
+    this->deviceType
   );
 
   if (command == RGB_ON) {

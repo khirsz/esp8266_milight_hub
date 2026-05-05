@@ -11,7 +11,8 @@ const MiLightRemoteConfig* MiLightRemoteConfig::ALL_REMOTES[] = {
   &FUT098Config, // rgb
   &FUT089Config, // 8-group rgb+cct (b8, fut089)
   &FUT091Config,
-  &FUT020Config
+  &FUT020Config,
+  &FUT098SatConfig // rgb with 13-mode cycle driver
 };
 
 const size_t MiLightRemoteConfig::NUM_REMOTES = size(ALL_REMOTES);
@@ -104,5 +105,13 @@ const MiLightRemoteConfig FUT020Config(
   MiLightRadioConfig::ALL_CONFIGS[4],
   REMOTE_TYPE_FUT020,
   "fut020",
+  0
+);
+
+const MiLightRemoteConfig FUT098SatConfig( //rgb with 13-mode cycle driver
+  new RgbSatPacketFormatter(),
+  MiLightRadioConfig::ALL_CONFIGS[3],
+  REMOTE_TYPE_RGB_SAT,
+  "rgb_sat",
   0
 );

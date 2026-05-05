@@ -25,6 +25,12 @@ public:
     : PacketFormatter(REMOTE_TYPE_RGB, 6, 20)
   { }
 
+protected:
+  RgbPacketFormatter(MiLightRemoteType type)
+    : PacketFormatter(type, 6, 20)
+  { }
+
+public:
   virtual void updateStatus(MiLightStatus status, uint8_t groupId);
   virtual void updateBrightness(uint8_t value);
   virtual void increaseBrightness();

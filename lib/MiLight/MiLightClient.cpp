@@ -6,6 +6,7 @@
 #include <TokenIterator.h>
 #include <ParsedColor.h>
 #include <MiLightCommands.h>
+#include <RgbSatPacketFormatter.h>
 #include <functional>
 
 
@@ -616,6 +617,16 @@ bool MiLightClient::handleTransition(JsonObject args, JsonDocument& responseObj)
 }
 
 void MiLightClient::handleEffect(const String& effect) {
+  // For rgb_sat, named modes take precedence over generic effect names
+  // (e.g. "white" must mean mode 1, not the rgbw white-mode command).
+  if (currentRemote != NULL && currentRemote->type == REMOTE_TYPE_RGB_SAT) {
+    int mode = RgbSatPacketFormatter::modeFromName(effect.c_str());
+    if (mode >= 0) {
+      this->updateMode(static_cast<uint8_t>(mode));
+      return;
+    }
+  }
+
   if (effect == MiLightCommandNames::NIGHT_MODE) {
     this->enableNightMode();
   } else if (effect == "white" || effect == "white_mode") {

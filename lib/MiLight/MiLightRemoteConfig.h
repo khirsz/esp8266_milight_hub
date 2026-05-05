@@ -3,6 +3,7 @@
 
 #include <RgbwPacketFormatter.h>
 #include <RgbPacketFormatter.h>
+#include <RgbSatPacketFormatter.h>
 #include <RgbCctPacketFormatter.h>
 #include <CctPacketFormatter.h>
 #include <FUT089PacketFormatter.h>
@@ -49,5 +50,6 @@ extern const MiLightRemoteConfig FUT089Config; //rgb+cct B8 / FUT089
 extern const MiLightRemoteConfig FUT098Config; //rgb
 extern const MiLightRemoteConfig FUT091Config; //v2 cct
 extern const MiLightRemoteConfig FUT020Config;
+extern const MiLightRemoteConfig FUT098SatConfig; //rgb with 13-mode cycle driver
 
 #endif

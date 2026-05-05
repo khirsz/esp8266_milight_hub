@@ -131,6 +131,7 @@ Model #|Name|Compatible Bulbs
 |FUT096|RGB/W|<ol><li>FUT014</li><li>FUT016</li><li>FUT103</li>|
 |FUT005<br/>FUT006<br/>FUT007</li></ol>|CCT|<ol><li>FUT011</li><li>FUT017</li><li>FUT019</li></ol>|
 |FUT098|RGB|Most RGB LED Strip Controlers|
+|FUT098 (rgb_sat)|RGB + 13-mode cycle|RGB strip controllers whose pilot has a 13-step `next_mode` cycle (saturation, pulsing, blinking variants, demo) — exposed as named HA effects|
 |FUT020|RGB|Some other RGB LED strip controllers|
 |FUT092|RGB/CCT|<ol><li>FUT012</li><li>FUT013</li><li>FUT014</li><li>FUT015</li><li>FUT103</li><li>FUT104</li><li>FUT105</li><li>Many RGB/CCT LED Strip Controllers</li></ol>|
 |FUT091|CCT v2|Most newer dual white bulbs and controllers|

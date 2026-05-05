@@ -1,5 +1,6 @@
 #include <HomeAssistantDiscoveryClient.h>
 #include <MiLightCommands.h>
+#include <RgbSatPacketFormatter.h>
 #include <Units.h>
 #ifdef ESP8266
   #include <ESP8266WiFi.h>
@@ -99,16 +100,24 @@ void HomeAssistantDiscoveryClient::addConfig(const char* alias, const BulbId& bu
       break; //nothing
   }
 
-  // All bulbs except CCT have 9 modes.  FUT029 and RGB/FUT096 has 9 modes, but they
-  // are not selectable directly.  There are only "next mode" commands.
-  switch (bulbId.deviceType) {
-    case REMOTE_TYPE_CCT:
-    case REMOTE_TYPE_RGB:
-    case REMOTE_TYPE_FUT020:
-      break;
-    default:
-      addNumberedEffects(effects, 0, 8);
-      break;
+  // rgb_sat exposes its own 13 named modes; replace the default night_mode with them.
+  if (bulbId.deviceType == REMOTE_TYPE_RGB_SAT) {
+    effects.clear();
+    for (size_t i = 0; i < RGB_SAT_TOTAL_MODES; i++) {
+      effects.add(RGB_SAT_MODE_MAP[i].name);
+    }
+  } else {
+    // All bulbs except CCT have 9 modes.  FUT029 and RGB/FUT096 has 9 modes, but they
+    // are not selectable directly.  There are only "next mode" commands.
+    switch (bulbId.deviceType) {
+      case REMOTE_TYPE_CCT:
+      case REMOTE_TYPE_RGB:
+      case REMOTE_TYPE_FUT020:
+        break;
+      default:
+        addNumberedEffects(effects, 0, 8);
+        break;
+    }
   }
 
   // supported_color_modes

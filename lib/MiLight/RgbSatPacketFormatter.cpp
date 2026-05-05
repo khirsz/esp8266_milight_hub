@@ -1,4 +1,5 @@
 #include <RgbSatPacketFormatter.h>
+#include <GroupStateStore.h>
 #include <string.h>
 
 const RgbSatModeMapping RGB_SAT_MODE_MAP[RGB_SAT_TOTAL_MODES] = {
@@ -41,6 +42,22 @@ void RgbSatPacketFormatter::updateMode(uint8_t mode) {
   if (mode >= RGB_SAT_TOTAL_MODES) {
     return;
   }
+
+  // Reflect the mode in GroupState.saturation so HA shows a sensible value.
+  // The next onPacketSentHandler full-state publish will broadcast it.
+  if (this->stateStore != NULL) {
+    GroupState* state = this->stateStore->get(deviceId, groupId, this->deviceType);
+    if (state != NULL) {
+      uint8_t saturation;
+      switch (mode) {
+        case 1:  saturation = 0;   break;  // white
+        case 2:  saturation = 50;  break;  // low_saturation
+        default: saturation = 100; break;  // normal + animations
+      }
+      state->setSaturation(saturation);
+    }
+  }
+
   resetToMode0();
   for (uint8_t i = 0; i < mode; i++) {
     nextMode();

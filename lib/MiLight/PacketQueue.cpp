@@ -25,13 +25,14 @@ std::shared_ptr<QueuedPacket> PacketQueue::pop() {
 
 std::shared_ptr<QueuedPacket> PacketQueue::checkoutPacket() {
   if (queue.size() == MILIGHT_MAX_QUEUED_PACKETS) {
+    // Drop the oldest packet so the most recent user intent survives,
+    // instead of silently overwriting the freshly-enqueued tail.
     ++droppedPackets;
-    return queue.getLast();
-  } else {
-    std::shared_ptr<QueuedPacket> packet = std::make_shared<QueuedPacket>();
-    queue.add(packet);
-    return packet;
+    queue.shift();
   }
+  std::shared_ptr<QueuedPacket> packet = std::make_shared<QueuedPacket>();
+  queue.add(packet);
+  return packet;
 }
 
 void PacketQueue::checkinPacket(std::shared_ptr<QueuedPacket> packet) {

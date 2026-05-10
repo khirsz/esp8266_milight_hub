@@ -3,7 +3,7 @@
 #ifndef _RGB_SAT_PACKET_FORMATTER_H
 #define _RGB_SAT_PACKET_FORMATTER_H
 
-#define RGB_SAT_TOTAL_MODES 13
+#define RGB_SAT_TOTAL_MODES 15
 #define RGB_SAT_RESET_HUE   240  // blue, in degrees
 
 struct RgbSatModeMapping {

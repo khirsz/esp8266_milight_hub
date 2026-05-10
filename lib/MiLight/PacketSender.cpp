@@ -17,6 +17,7 @@ PacketSender::PacketSender(
         (settings.packetRepeatThrottleSensitivity / 1000.0) * settings.packetRepeats
       )
     )
+  , nextPacketAllowedAt(0)
 { }
 
 void PacketSender::enqueue(uint8_t* packet, const MiLightRemoteConfig* remoteConfig, const size_t repeatsOverride) {
@@ -31,8 +32,10 @@ void PacketSender::enqueue(uint8_t* packet, const MiLightRemoteConfig* remoteCon
 }
 
 void PacketSender::loop() {
-  // Switch to the next packet if we're done with the current one
-  if (packetRepeatsRemaining == 0 && !queue.isEmpty()) {
+  // Switch to the next packet if we're done with the current one,
+  // but only after the inter-packet quiet gap has elapsed so the
+  // receiver can register each press as a discrete event.
+  if (packetRepeatsRemaining == 0 && !queue.isEmpty() && (long)(millis() - nextPacketAllowedAt) >= 0) {
     nextPacket();
   }
 
@@ -70,9 +73,13 @@ void PacketSender::handleCurrentPacket() {
   sendRepeats(numToSend);
   packetRepeatsRemaining -= numToSend;
 
-  // If we're done sending this packet, fire the sent packet callback
-  if (packetRepeatsRemaining == 0 && packetSentHandler != nullptr) {
-    packetSentHandler(currentPacket->packet, *currentPacket->remoteConfig);
+  // If we're done sending this packet, arm the inter-packet gap so the
+  // next packet (if any) waits before transmitting, then fire the callback.
+  if (packetRepeatsRemaining == 0) {
+    nextPacketAllowedAt = millis() + MILIGHT_INTER_PACKET_GAP_MS;
+    if (packetSentHandler != nullptr) {
+      packetSentHandler(currentPacket->packet, *currentPacket->remoteConfig);
+    }
   }
 }
 

@@ -5,6 +5,13 @@
 #include <PacketQueue.h>
 #include <RadioSwitchboard.h>
 
+// Minimum quiet time between two distinct queued packets, in ms.
+// Some Mi-Light receivers (notably RGB_SAT) merge rapid back-to-back
+// presses; this gap forces each packet to register as a discrete press.
+#ifndef MILIGHT_INTER_PACKET_GAP_MS
+#define MILIGHT_INTER_PACKET_GAP_MS 250
+#endif
+
 class PacketSender {
 public:
   typedef std::function<void(uint8_t* packet, const MiLightRemoteConfig& config)> PacketSentHandler;
@@ -52,6 +59,10 @@ private:
   // Used to track auto repeat limiting
   unsigned long lastSend;
   uint8_t currentResendCount;
+
+  // Earliest millis() at which the next packet may start sending.
+  // Set when a packet finishes; honored by loop() before switching.
+  unsigned long nextPacketAllowedAt;
 
   // This will be pre-computed, but is simply:
   //

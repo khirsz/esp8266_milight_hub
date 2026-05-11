@@ -1,43 +1,51 @@
 #include <PacketQueue.h>
 
+#include <string.h>
+
 PacketQueue::PacketQueue()
-  : droppedPackets(0)
+  : head(0)
+  , tail(0)
+  , count(0)
+  , droppedPackets(0)
 { }
 
 void PacketQueue::push(const uint8_t* packet, const MiLightRemoteConfig* remoteConfig, const size_t repeatsOverride) {
-  std::shared_ptr<QueuedPacket> qp = checkoutPacket();
-  memcpy(qp->packet, packet, remoteConfig->packetFormatter->getPacketLength());
-  qp->remoteConfig = remoteConfig;
-  qp->repeatsOverride = repeatsOverride;
+  if (count == MILIGHT_MAX_QUEUED_PACKETS) {
+    // Queue full: drop the oldest entry so the freshest user intent
+    // survives, mirroring the previous LinkedList-backed behavior.
+    ++droppedPackets;
+    tail = (tail + 1) % MILIGHT_MAX_QUEUED_PACKETS;
+    --count;
+  }
+
+  QueuedPacket& slot = slots[head];
+  memcpy(slot.packet, packet, remoteConfig->packetFormatter->getPacketLength());
+  slot.remoteConfig = remoteConfig;
+  slot.repeatsOverride = repeatsOverride;
+
+  head = (head + 1) % MILIGHT_MAX_QUEUED_PACKETS;
+  ++count;
+}
+
+bool PacketQueue::pop(QueuedPacket& out) {
+  if (count == 0) {
+    return false;
+  }
+
+  out = slots[tail];
+  tail = (tail + 1) % MILIGHT_MAX_QUEUED_PACKETS;
+  --count;
+  return true;
 }
 
 bool PacketQueue::isEmpty() const {
-  return queue.size() == 0;
+  return count == 0;
+}
+
+size_t PacketQueue::size() const {
+  return count;
 }
 
 size_t PacketQueue::getDroppedPacketCount() const {
   return droppedPackets;
-}
-
-std::shared_ptr<QueuedPacket> PacketQueue::pop() {
-  return queue.shift();
-}
-
-std::shared_ptr<QueuedPacket> PacketQueue::checkoutPacket() {
-  if (queue.size() == MILIGHT_MAX_QUEUED_PACKETS) {
-    // Drop the oldest packet so the most recent user intent survives,
-    // instead of silently overwriting the freshly-enqueued tail.
-    ++droppedPackets;
-    queue.shift();
-  }
-  std::shared_ptr<QueuedPacket> packet = std::make_shared<QueuedPacket>();
-  queue.add(packet);
-  return packet;
-}
-
-void PacketQueue::checkinPacket(std::shared_ptr<QueuedPacket> packet) {
-}
-
-size_t PacketQueue::size() const {
-  return queue.size();
 }

@@ -7,7 +7,7 @@ PacketSender::PacketSender(
   PacketSentHandler packetSentHandler
 ) : radioSwitchboard(radioSwitchboard)
   , settings(settings)
-  , currentPacket(nullptr)
+  , hasCurrentPacket(false)
   , packetRepeatsRemaining(0)
   , packetSentHandler(packetSentHandler)
   , lastSend(0)
@@ -40,7 +40,7 @@ void PacketSender::loop() {
   }
 
   // If there's a packet we're handling, deal with it
-  if (currentPacket != nullptr && packetRepeatsRemaining > 0) {
+  if (hasCurrentPacket && packetRepeatsRemaining > 0) {
     handleCurrentPacket();
   }
 }
@@ -53,10 +53,13 @@ void PacketSender::nextPacket() {
 #ifdef DEBUG_PRINTF
   Serial.printf("Switching to next packet, %d packets in queue\n", queue.size());
 #endif
-  currentPacket = queue.pop();
+  hasCurrentPacket = queue.pop(currentPacket);
+  if (!hasCurrentPacket) {
+    return;
+  }
 
-  if (currentPacket->repeatsOverride > 0) {
-    packetRepeatsRemaining = currentPacket->repeatsOverride;
+  if (currentPacket.repeatsOverride > 0) {
+    packetRepeatsRemaining = currentPacket.repeatsOverride;
   } else {
     packetRepeatsRemaining = settings.packetRepeats;
   }
@@ -67,7 +70,7 @@ void PacketSender::nextPacket() {
 
 void PacketSender::handleCurrentPacket() {
   // Always switch radio.  could've been listening in another context
-  radioSwitchboard.switchRadio(currentPacket->remoteConfig);
+  radioSwitchboard.switchRadio(currentPacket.remoteConfig);
 
   size_t numToSend = std::min(packetRepeatsRemaining, settings.packetRepeatsPerLoop);
   sendRepeats(numToSend);
@@ -78,8 +81,10 @@ void PacketSender::handleCurrentPacket() {
   if (packetRepeatsRemaining == 0) {
     nextPacketAllowedAt = millis() + MILIGHT_INTER_PACKET_GAP_MS;
     if (packetSentHandler != nullptr) {
-      packetSentHandler(currentPacket->packet, *currentPacket->remoteConfig);
+      packetSentHandler(currentPacket.packet, *currentPacket.remoteConfig);
     }
+
+    hasCurrentPacket = false;
   }
 }
 
@@ -92,19 +97,19 @@ size_t PacketSender::droppedPackets() const {
 }
 
 void PacketSender::sendRepeats(size_t num) {
-  size_t len = currentPacket->remoteConfig->packetFormatter->getPacketLength();
+  size_t len = currentPacket.remoteConfig->packetFormatter->getPacketLength();
 
 #ifdef DEBUG_PRINTF
   Serial.printf_P(PSTR("Sending packet (%d repeats): \n"), num);
   for (size_t i = 0; i < len; i++) {
-    Serial.printf_P(PSTR("%02X "), currentPacket->packet[i]);
+    Serial.printf_P(PSTR("%02X "), currentPacket.packet[i]);
   }
   Serial.println();
   int iStart = millis();
 #endif
 
   for (size_t i = 0; i < num; ++i) {
-    radioSwitchboard.write(currentPacket->packet, len);
+    radioSwitchboard.write(currentPacket.packet, len);
   }
 
 #ifdef DEBUG_PRINTF

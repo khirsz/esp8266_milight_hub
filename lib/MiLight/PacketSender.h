@@ -39,8 +39,10 @@ private:
   GroupStateStore* stateStore;
   PacketQueue queue;
 
-  // The current packet we're sending and the number of repeats left
-  std::shared_ptr<QueuedPacket> currentPacket;
+  // The current packet we're sending and the number of repeats left.
+  // Held by value so the queue slot is freed as soon as we pop.
+  QueuedPacket currentPacket;
+  bool hasCurrentPacket;
   size_t packetRepeatsRemaining;
 
   // Handler called after packets are sent.  Will not be called multiple times

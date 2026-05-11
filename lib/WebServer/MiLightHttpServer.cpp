@@ -380,8 +380,16 @@ void MiLightHttpServer::handleListenGateway(RequestContext& request) {
     radio = radios->switchRadio(tmpRemoteConfig);
   }
 
+  const unsigned long startTime = millis();
   while (remoteConfig == NULL) {
     if (!server.client().connected()) {
+      return;
+    }
+
+    if ((millis() - startTime) >= HTTP_LISTEN_TIMEOUT_MS) {
+      // No packet within the poll window. Return an empty body and let
+      // the client poll again — this is what keeps MQTT, state flushes,
+      // and main-loop packet sending alive while the sniffer page is open.
       return;
     }
 

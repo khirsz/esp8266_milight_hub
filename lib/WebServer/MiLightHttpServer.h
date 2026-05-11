@@ -12,6 +12,14 @@
 
 #define MAX_DOWNLOAD_ATTEMPTS 3
 
+// Caps how long a single /gateway_traffic poll will block the main loop
+// waiting for a packet. The web UI polls back, so keeping this short
+// preserves MQTT keepalive, state flushes, and packet sending while the
+// sniffer page is open.
+#ifndef HTTP_LISTEN_TIMEOUT_MS
+#define HTTP_LISTEN_TIMEOUT_MS 50
+#endif
+
 typedef std::function<void(void)> SettingsSavedHandler;
 typedef std::function<void(const BulbId& id)> GroupDeletedHandler;
 typedef std::function<void(void)> THandlerFunction;

@@ -1,4 +1,6 @@
 #include <stddef.h>
+#include <string.h>
+#include <algorithm>
 #include <MqttClient.h>
 #include <TokenIterator.h>
 #include <UrlTokenBindings.h>
@@ -12,6 +14,33 @@
 static const char* STATUS_CONNECTED = "connected";
 static const char* STATUS_DISCONNECTED = "disconnected_clean";
 static const char* STATUS_LWT_DISCONNECTED = "disconnected_unclean";
+
+namespace {
+  // Returns the total length of the placeholder token (including the
+  // leading ':') if `p` points at ":<name>" where the character after
+  // <name> is a non-identifier byte (i.e. a real token boundary).
+  // Returns 0 otherwise. This prevents `:device_id` from matching inside
+  // `:device_id_extended`.
+  inline size_t matchToken(const char* p, const char* name, size_t nameLen) {
+    if (strncmp(p + 1, name, nameLen) != 0) {
+      return 0;
+    }
+    const char next = p[1 + nameLen];
+    const bool isIdent =
+      next == '_'
+      || (next >= '0' && next <= '9')
+      || (next >= 'A' && next <= 'Z')
+      || (next >= 'a' && next <= 'z');
+    return isIdent ? 0 : nameLen + 1;
+  }
+
+  inline void appendBounded(char*& w, char* limit, const char* src, size_t n) {
+    const size_t avail = limit > w ? static_cast<size_t>(limit - w) : 0;
+    const size_t copy = std::min(n, avail);
+    memcpy(w, src, copy);
+    w += copy;
+  }
+}
 
 MqttClient::MqttClient(Settings& settings, MiLightClient*& milightClient)
   : mqttClient(tcpClient),
@@ -198,14 +227,15 @@ void MqttClient::publish(
   }
 
   BulbId bulbId(deviceId, groupId, remoteConfig.type);
-  String topic = bindTopicString(_topic, bulbId);
+  char topicBuf[MQTT_TOPIC_BUFFER_SIZE];
+  bindTopicTo(_topic, bulbId, topicBuf, sizeof(topicBuf));
   const bool retain = _retain && this->settings.mqttRetain;
 
 #ifdef MQTT_DEBUG
-  printf("MqttClient - publishing update to %s\n", topic.c_str());
+  printf("MqttClient - publishing update to %s\n", topicBuf);
 #endif
 
-  send(topic.c_str(), message, retain);
+  send(topicBuf, message, retain);
 }
 
 void MqttClient::publishCallback(char* topic, byte* payload, int length) {
@@ -275,24 +305,74 @@ void MqttClient::publishCallback(char* topic, byte* payload, int length) {
   milightClient->update(obj);
 }
 
-String MqttClient::bindTopicString(const String& topicPattern, const BulbId& bulbId) {
-  String boundTopic = topicPattern;
-  String deviceIdHex = bulbId.getHexDeviceId();
-
-  boundTopic.replace(":device_id", deviceIdHex);
-  boundTopic.replace(":hex_device_id", deviceIdHex);
-  boundTopic.replace(":dec_device_id", String(bulbId.deviceId));
-  boundTopic.replace(":group_id", String(bulbId.groupId));
-  boundTopic.replace(":device_type", MiLightRemoteTypeHelpers::remoteTypeToString(bulbId.deviceType));
-
-  auto it = settings.findAlias(bulbId.deviceType, bulbId.deviceId, bulbId.groupId);
-  if (it != settings.groupIdAliases.end()) {
-    boundTopic.replace(":device_alias", it->first);
-  } else {
-    boundTopic.replace(":device_alias", "__unnamed_group");
+size_t MqttClient::bindTopicTo(const String& topicPattern, const BulbId& bulbId, char* out, size_t outSize) {
+  if (outSize == 0) {
+    return 0;
   }
 
-  return boundTopic;
+  const char* p = topicPattern.c_str();
+  char* w = out;
+  char* const limit = out + outSize - 1;  // reserve one byte for null terminator
+
+  // Resolve the alias lazily — most patterns won't reference it, and the
+  // lookup is an O(n) scan over the alias map.
+  const char* aliasCStr = nullptr;
+
+  while (*p && w < limit) {
+    if (*p != ':') {
+      *w++ = *p++;
+      continue;
+    }
+
+    size_t skip;
+    char numBuf[8];
+
+    if ((skip = matchToken(p, "hex_device_id", 13))) {
+      int n = snprintf(numBuf, sizeof(numBuf), "%04X", bulbId.deviceId);
+      appendBounded(w, limit, numBuf, n < 0 ? 0 : static_cast<size_t>(n));
+      p += skip;
+    } else if ((skip = matchToken(p, "dec_device_id", 13))) {
+      int n = snprintf(numBuf, sizeof(numBuf), "%u", bulbId.deviceId);
+      appendBounded(w, limit, numBuf, n < 0 ? 0 : static_cast<size_t>(n));
+      p += skip;
+    } else if ((skip = matchToken(p, "device_id", 9))) {
+      int n = snprintf(numBuf, sizeof(numBuf), "%04X", bulbId.deviceId);
+      appendBounded(w, limit, numBuf, n < 0 ? 0 : static_cast<size_t>(n));
+      p += skip;
+    } else if ((skip = matchToken(p, "group_id", 8))) {
+      int n = snprintf(numBuf, sizeof(numBuf), "%u", bulbId.groupId);
+      appendBounded(w, limit, numBuf, n < 0 ? 0 : static_cast<size_t>(n));
+      p += skip;
+    } else if ((skip = matchToken(p, "device_type", 11))) {
+      // remoteTypeToString returns a String — one unavoidable allocation
+      // per device_type token until that helper is migrated to const char*.
+      String typeStr = MiLightRemoteTypeHelpers::remoteTypeToString(bulbId.deviceType);
+      appendBounded(w, limit, typeStr.c_str(), typeStr.length());
+      p += skip;
+    } else if ((skip = matchToken(p, "device_alias", 12))) {
+      if (aliasCStr == nullptr) {
+        auto it = settings.findAlias(bulbId.deviceType, bulbId.deviceId, bulbId.groupId);
+        aliasCStr = (it != settings.groupIdAliases.end())
+          ? it->first.c_str()
+          : "__unnamed_group";
+      }
+      appendBounded(w, limit, aliasCStr, strlen(aliasCStr));
+      p += skip;
+    } else {
+      // Unknown ":foo" — pass through literally (matches old replace()
+      // behavior, which simply left unrecognized tokens in place).
+      *w++ = *p++;
+    }
+  }
+
+  *w = '\0';
+  return static_cast<size_t>(w - out);
+}
+
+String MqttClient::bindTopicString(const String& topicPattern, const BulbId& bulbId) {
+  char buf[MQTT_TOPIC_BUFFER_SIZE];
+  bindTopicTo(topicPattern, bulbId, buf, sizeof(buf));
+  return String(buf);
 }
 
 String MqttClient::generateConnectionStatusMessage(const char* connectionStatus) {

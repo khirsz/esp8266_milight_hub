@@ -15,6 +15,12 @@
 #define MQTT_PACKET_CHUNK_SIZE 128
 #endif
 
+// Stack buffer used to build bound MQTT topics. Anything beyond this is
+// truncated; the heap is intentionally not touched on the publish hot path.
+#ifndef MQTT_TOPIC_BUFFER_SIZE
+#define MQTT_TOPIC_BUFFER_SIZE 200
+#endif
+
 #ifndef _MQTT_CLIENT_H
 #define _MQTT_CLIENT_H
 
@@ -63,6 +69,12 @@ public:
   const __FlashStringHelper* getConnectionStatusString();
 
   String bindTopicString(const String& topicPattern, const BulbId& bulbId);
+
+  // Resolves placeholder tokens (:device_id, :group_id, :device_type, etc.)
+  // into `out` without allocating on the heap. Always null-terminates when
+  // `outSize > 0`. Returns the number of bytes written (excluding the
+  // terminator). Truncates silently if the result wouldn't fit.
+  size_t bindTopicTo(const String& topicPattern, const BulbId& bulbId, char* out, size_t outSize);
 
 private:
   WiFiClient tcpClient;
